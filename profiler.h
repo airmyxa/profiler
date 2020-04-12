@@ -5,7 +5,6 @@
 #include <chrono>
 #include <algorithm>
 #include <fstream>
-
 #include <thread>
 
 struct ProfileResult
@@ -16,9 +15,9 @@ struct ProfileResult
 };
 
 
-class Instrumentor
+class ProfileWriter
 {
-	friend class InstrumentationTimer;
+	friend class ProfileTimer;
 private:
     std::string m_CurrentSession;
     std::ofstream m_OutputStream;
@@ -26,7 +25,7 @@ private:
 
 // private constructors: 
 private:
-    Instrumentor() : m_ProfileCount(0) { }
+    ProfileWriter() : m_ProfileCount(0) { }
 
 // private functions: 
 private:
@@ -80,20 +79,20 @@ private:
         m_OutputStream.flush();
     }
 
-	static Instrumentor& Get()
+	static ProfileWriter& Get()
     {
-        static Instrumentor instance;
+        static ProfileWriter instance;
         return instance;
     }
 
 // public constructors and assignment operators are deleted
 public:
-	Instrumentor(const Instrumentor& other) = delete;
-	Instrumentor(Instrumentor&& other) = delete;
-	Instrumentor& operator=(const Instrumentor& other) = delete;
-	Instrumentor&& operator=(Instrumentor&& other) = delete;
+	ProfileWriter(const ProfileWriter& other) = delete;
+	ProfileWriter(ProfileWriter&& other) = delete;
+	ProfileWriter& operator=(const ProfileWriter& other) = delete;
+	ProfileWriter&& operator=(ProfileWriter&& other) = delete;
 
-	~Instrumentor() {
+	~ProfileWriter() {
 		if (m_OutputStream.is_open())
 			m_OutputStream.close();
 	}
@@ -113,7 +112,7 @@ public:
 
 
 
-class InstrumentationTimer
+class ProfileTimer
 {
 private:
 	const char* m_Name;
@@ -121,13 +120,13 @@ private:
 	bool m_Stopped;
 
 public:
-    InstrumentationTimer(const char* name)
+    ProfileTimer(const char* name)
         : m_Name(name), m_Stopped(false)
     {
         m_StartTimepoint = std::chrono::high_resolution_clock::now();
     }
 
-    ~InstrumentationTimer()
+    ~ProfileTimer()
     {
         if (!m_Stopped)
             Stop();
@@ -137,14 +136,23 @@ public:
     {
         auto endTimepoint = std::chrono::high_resolution_clock::now();
 
-        long long start = std::chrono::time_point_cast<std::chrono::milliseconds>(m_StartTimepoint).time_since_epoch().count();
-        long long end = std::chrono::time_point_cast<std::chrono::milliseconds>(endTimepoint).time_since_epoch().count();
+        long long start = std::chrono::time_point_cast<std::chrono::microseconds>(m_StartTimepoint).time_since_epoch().count();
+        long long end = std::chrono::time_point_cast<std::chrono::microseconds>(endTimepoint).time_since_epoch().count();
 
         uint32_t threadID = std::hash<std::thread::id>{}(std::this_thread::get_id());
-        Instrumentor::Get().WriteProfile({ m_Name, start, end, threadID });
+        ProfileWriter::Get().WriteProfile({ m_Name, start, end, threadID });
 
         m_Stopped = true;
     }
 };
+
+#define PROFILING 1
+#if PROFILING
+#define PROFILE_SCOPE(name) ProfileTimer timer##__LINE__(name)
+#define PROFILE_FUNCTION() PROFILE_SCOPE(__PRETTY_FUNCTION__)
+#else
+#define PROFILE_SCOPE(name)
+#endif
+
 
 #endif // PROFILER_H

@@ -3,7 +3,7 @@
 #include "profiler.h"
 
 int func1() {
-    InstrumentationTimer timer("func1");
+    PROFILE_FUNCTION();
     int i = 0;
     for(; i < 3; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -12,7 +12,7 @@ int func1() {
 }
 
 int func2() {
-    InstrumentationTimer timer("func2");
+    PROFILE_FUNCTION();
     int i = 0;
     for(; i < 2; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -23,10 +23,10 @@ int func2() {
 
 int main()
 {
-    Instrumentor::BeginSession("start");
+    ProfileWriter::BeginSession("start");
     auto res1 = func1();
     auto res2 = func2();
-    Instrumentor::EndSession();
+    ProfileWriter::EndSession();
 
     std::cout << res1 << res2;
 
