@@ -29,9 +29,9 @@ void func3() {
 
 int main()
 {
-    ProfileWriter::BeginSession("start");
+    ProfileWriter::beginSession("start");
     func3();
-    ProfileWriter::EndSession();
+    ProfileWriter::endSession();
 
     return EXIT_SUCCESS;
 }
