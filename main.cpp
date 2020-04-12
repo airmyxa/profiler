@@ -22,15 +22,24 @@ int func2() {
 
 void func3() {
     PROFILE_FUNCTION();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto x = func1();    
     auto y = func2();
+}
+
+
+void func4() {
+    PROFILE_FUNCTION();
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 }
 
 
 int main()
 {
     ProfileWriter::beginSession("start");
+    std::thread thr(func4);
     func3();
+    thr.join();
     ProfileWriter::endSession();
 
     return EXIT_SUCCESS;

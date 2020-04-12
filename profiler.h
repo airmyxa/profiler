@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <fstream>
 #include <thread>
+#include <mutex>
 
 // define PROFILING 0 to turn it off
 
@@ -24,13 +25,13 @@ struct ProfileResult
 };
 
 
-class ProfileWriter
-{
+class ProfileWriter {
 	friend class ProfileTimer;
 private:
     std::string m_currentSession;
     std::ofstream m_outputStream;
     int m_profileCount;
+    std::mutex m_mutex;
 
 // private constructors: 
 private:
@@ -38,12 +39,13 @@ private:
 
 // private functions: 
 private:
-	void beginSessionImpl(const std::string& name, const std::string& filepath = "results.json") {
+    template <typename T>
+	void beginSessionImpl(T&& name, const char* filepath = "results.json") {
 		m_outputStream.open(filepath);
 		if (!m_outputStream.is_open())
 			std::cerr << "couldn't open or create the file for profiler\n";
         writeHeader();
-        m_currentSession = name;
+        m_currentSession = std::forward<T>(name);
 	}
 
 	void endSessionImpl() {
@@ -53,24 +55,23 @@ private:
         m_profileCount = 0;
 	}
 
-	void writeHeader()
-    {
+	void writeHeader() {
         m_outputStream << "{\"otherData\": {},\"traceEvents\":[";
         m_outputStream.flush();
     }
 
-    void writeFooter()
-    {
+    void writeFooter() {
         m_outputStream << "]}";
         m_outputStream.flush();
     }
 
-	void writeProfile(const ProfileResult& result)
-    {
+	void writeProfile(ProfileResult&& result) {
+        std::lock_guard<std::mutex> locker(m_mutex);
+
         if (m_profileCount++ > 0)
             m_outputStream << ",";
 
-        std::string name = result.name;
+        std::string name = std::move(result.name);
         std::replace(name.begin(), name.end(), '"', '\'');
 
         m_outputStream << "{";
@@ -86,8 +87,7 @@ private:
         m_outputStream.flush();
     }
 
-	static ProfileWriter& get()
-    {
+	static ProfileWriter& get() {
         static ProfileWriter instance;
         return instance;
     }
@@ -106,41 +106,37 @@ public:
 
 public:
 
-    static void beginSession(const std::string& name, const std::string& filepath = "results.json")
-    {
-        get().beginSessionImpl(name, filepath);
+    template <typename T>
+    static void beginSession(T&& name, const char* filepath = "results.json") {
+        get().beginSessionImpl(std::forward<T>(name), filepath);
     }
 
-    static void endSession()
-    {
+    static void endSession() {
         get().endSessionImpl();
     }
 };
 
 
 
-class ProfileTimer
-{
+class ProfileTimer {
 private:
-	const char* m_name;
+	std::string m_name;
 	std::chrono::time_point<std::chrono::high_resolution_clock> m_startTimepoint;
 	bool m_stopped;
 
 public:
-    explicit ProfileTimer(const char* name)
-        : m_name(name), m_stopped(false)
-    {
+    template <typename T>
+    explicit ProfileTimer(T&& name)
+        : m_name(std::forward<T>(name)), m_stopped(false) {
         m_startTimepoint = std::chrono::high_resolution_clock::now();
     }
 
-    ~ProfileTimer()
-    {
+    ~ProfileTimer() {
         if (!m_stopped)
-            Stop();
+            stop();
     }
 
-    void Stop()
-    {
+    void stop() {
         auto endTimepoint = std::chrono::high_resolution_clock::now();
 
         long long start = std::chrono::time_point_cast<std::chrono::microseconds>(m_startTimepoint).time_since_epoch().count();
@@ -159,7 +155,8 @@ public:
 
 class ProfileWriter {
 public:
-    static void beginSession(const std::string&, const std::string& = "filename") { }
+    template <typename T>
+    static void beginSession(T&&, const char* = "filename") { }
     static void endSession() { }
 };
 #endif
