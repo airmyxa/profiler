@@ -37,8 +37,8 @@ void func4() {
 int main()
 {
     ProfileWriter::beginSession("start");
-    std::thread thr(func4);
-    func3();
+    std::thread thr(func4);        
+    func3();    
     thr.join();
     ProfileWriter::endSession();
 

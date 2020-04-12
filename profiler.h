@@ -32,31 +32,46 @@ private:
     std::ofstream m_outputStream;
     int m_profileCount;
     std::mutex m_mutex;
+    bool m_inSession;
 
 // private constructors: 
 private:
-    ProfileWriter() : m_profileCount(0) { }
+    ProfileWriter()
+        : m_profileCount(0), m_inSession(false) { }
 
 // private functions: 
 private:
     template <typename T>
-	void beginSessionImpl(T&& name, const char* filepath = "results.json") {
+	void beginSessionImpl(T&& name, const char* filepath = "results.json") {        
+        if (m_inSession) {
+            std::cout << "WARNING: Profiler session is already started\n";
+            return;
+        }        
 		m_outputStream.open(filepath);
-		if (!m_outputStream.is_open())
-			std::cerr << "couldn't open or create the file for profiler\n";
+        m_inSession = true;
+		if (!m_outputStream.is_open()) {
+			std::cout << "WARNING: couldn't open or create the file for profiler\n";
+            m_inSession = false;
+            return;
+        }        
         writeHeader();
         m_currentSession = std::forward<T>(name);
 	}
 
 	void endSessionImpl() {
-		writeFooter();
-        m_outputStream.close();        
-        m_currentSession = "";
-        m_profileCount = 0;
+        if (m_inSession) {
+		    writeFooter();
+            m_outputStream.close();        
+            m_currentSession = "";
+            m_profileCount = 0;
+            m_inSession = false;
+        }
+        else
+            std::cout << "WARNING: Profiler session is already finished\n";
 	}
 
 	void writeHeader() {
-        m_outputStream << "{\"otherData\": {},\"traceEvents\":[";
+        m_outputStream << "{\n\"otherData\": {},\n\"traceEvents\": \n[\n";
         m_outputStream.flush();
     }
 
@@ -66,6 +81,8 @@ private:
     }
 
 	void writeProfile(ProfileResult&& result) {
+        if (!m_inSession)
+            return;
         std::lock_guard<std::mutex> locker(m_mutex);
 
         if (m_profileCount++ > 0)
@@ -74,15 +91,15 @@ private:
         std::string name = std::move(result.name);
         std::replace(name.begin(), name.end(), '"', '\'');
 
-        m_outputStream << "{";
-        m_outputStream << "\"cat\":\"function\",";
-        m_outputStream << "\"dur\":" << (result.end - result.start) << ',';
-        m_outputStream << "\"name\":\"" << name << "\",";
-        m_outputStream << "\"ph\":\"X\",";
-        m_outputStream << "\"pid\":0,";
-        m_outputStream << "\"tid\":" << result.threadID << ",";
-        m_outputStream << "\"ts\":" << result.start;
-        m_outputStream << "}";        
+        m_outputStream << "\t{\n";
+        m_outputStream << "\t\"cat\": \"function\",\n";
+        m_outputStream << "\t\"dur\": " << (result.end - result.start) << ",\n";
+        m_outputStream << "\t\"name\": \"" << name << "\",\n";
+        m_outputStream << "\t\"ph\": \"X\",\n";
+        m_outputStream << "\t\"pid\": 0,\n";
+        m_outputStream << "\t\"tid\": " << result.threadID << ",\n";
+        m_outputStream << "\t\"ts\": " << result.start << '\n';
+        m_outputStream << "\t}\n";        
 
         m_outputStream.flush();
     }
@@ -108,6 +125,7 @@ public:
 
     template <typename T>
     static void beginSession(T&& name, const char* filepath = "results.json") {
+        static_assert(std::is_constructible_v<std::string, T>);
         get().beginSessionImpl(std::forward<T>(name), filepath);
     }
 
