@@ -7,6 +7,8 @@
 #include <fstream>
 #include <thread>
 
+// this implementation is unsafe to work with threads.
+
 struct ProfileResult
 {
     std::string Name;
@@ -72,9 +74,7 @@ private:
         m_OutputStream << "\"pid\":0,";
         m_OutputStream << "\"tid\":" << result.ThreadID << ",";
         m_OutputStream << "\"ts\":" << result.Start;
-        m_OutputStream << "}";
-
-        std::cout << "start = " << result.Start << " | end = " << result.End << " | duration = " << (result.End - result.Start) << '\n';
+        m_OutputStream << "}";        
 
         m_OutputStream.flush();
     }
@@ -149,7 +149,7 @@ public:
 #define PROFILING 1
 #if PROFILING
 #define PROFILE_SCOPE(name) ProfileTimer timer##__LINE__(name)
-#define PROFILE_FUNCTION() PROFILE_SCOPE(__PRETTY_FUNCTION__)
+#define PROFILE_FUNCTION() PROFILE_SCOPE(__PRETTY_FUNCTION__) // in Windows change __PRETTY_FUNCTION__ -> __FUNCSIG__
 #else
 #define PROFILE_SCOPE(name)
 #endif
