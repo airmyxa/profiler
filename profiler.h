@@ -1,91 +1,150 @@
+#ifndef PROFILER_H
+#define PROFILER_H
+
+#include <string>
 #include <chrono>
+#include <algorithm>
 #include <fstream>
-#include <exception>
 
-class ProfilerTimer {
-public:	
-	ProfilerTimer(const char* name) : m_name(name), m_stoped(false) {		
-		m_start = std::chrono::high_resolution_clock::now();	
-	}
+#include <thread>
 
-	~ProfilerTimer() {
-		if (!m_stoped)
-			stop();
-	}
+struct ProfileResult
+{
+    std::string Name;
+    long long Start, End;
+    uint32_t ThreadID;
+};
 
-	void stop() {
-		auto endTimePoint = std::chrono::high_resolution_clock::now();
-		auto endTime = std::chrono::time_point_cast<std::chrono::microseconds>(endTimePoint).time_since_epoch().count();
-		auto startTime = std::chrono::time_point_cast<std::chrono::microseconds>(m_start).time_since_epoch().count();
-		m_stoped = true;
-		// here json should be written
-	}
 
+class Instrumentor
+{
+	friend class InstrumentationTimer;
 private:
-	const char* m_name;
-	bool m_stoped;
-	std::chrono::time_point<std::chrono::high_resolution_clock> m_start;	
-};
+    std::string m_CurrentSession;
+    std::ofstream m_OutputStream;
+    int m_ProfileCount;
 
+// private constructors: 
+private:
+    Instrumentor() : m_ProfileCount(0) { }
 
-struct ProfilerData {
-	const char* function_name;
-	uint start_timepoint;
-	uint end_timepoint;
-};
+// private functions: 
+private:
+	void BeginSessionImpl(const std::string& name, const std::string& filepath = "results.json") {
+		m_OutputStream.open(filepath);
+		if (!m_OutputStream.is_open())
+			std::cerr << "couldn't open or create the file for profiler\n";
+        WriteHeader();
+        m_CurrentSession = name;
+	}
 
+	void EndSessionImpl() {
+		WriteFooter();
+        m_OutputStream.close();        
+        m_CurrentSession = "";
+        m_ProfileCount = 0;
+	}
 
-class ProfilerWriter {
+	void WriteHeader()
+    {
+        m_OutputStream << "{\"otherData\": {},\"traceEvents\":[";
+        m_OutputStream.flush();
+    }
+
+    void WriteFooter()
+    {
+        m_OutputStream << "]}";
+        m_OutputStream.flush();
+    }
+
+	void WriteProfile(const ProfileResult& result)
+    {
+        if (m_ProfileCount++ > 0)
+            m_OutputStream << ",";
+
+        std::string name = result.Name;
+        std::replace(name.begin(), name.end(), '"', '\'');
+
+        m_OutputStream << "{";
+        m_OutputStream << "\"cat\":\"function\",";
+        m_OutputStream << "\"dur\":" << (result.End - result.Start) << ',';
+        m_OutputStream << "\"name\":\"" << name << "\",";
+        m_OutputStream << "\"ph\":\"X\",";
+        m_OutputStream << "\"pid\":0,";
+        m_OutputStream << "\"tid\":" << result.ThreadID << ",";
+        m_OutputStream << "\"ts\":" << result.Start;
+        m_OutputStream << "}";
+
+        std::cout << "start = " << result.Start << " | end = " << result.End << " | duration = " << (result.End - result.Start) << '\n';
+
+        m_OutputStream.flush();
+    }
+
+	static Instrumentor& Get()
+    {
+        static Instrumentor instance;
+        return instance;
+    }
+
+// public constructors and assignment operators are deleted
+public:
+	Instrumentor(const Instrumentor& other) = delete;
+	Instrumentor(Instrumentor&& other) = delete;
+	Instrumentor& operator=(const Instrumentor& other) = delete;
+	Instrumentor&& operator=(Instrumentor&& other) = delete;
+
+	~Instrumentor() {
+		if (m_OutputStream.is_open())
+			m_OutputStream.close();
+	}
+
 public:
 
-	ProfilerWriter(const ProfilerWriter& other) = delete;
-	ProfilerWriter(ProfilerWriter&& other) = delete;
-	ProfilerWriter& operator=(const ProfilerWriter& other) = delete;
-	ProfilerWriter&& operator=(ProfilerWriter&& other) = delete;
-	
-	~ProfilerWriter() {
-		if (fout.is_open())		
-			fout.close();
-	}
+    static void BeginSession(const std::string& name, const std::string& filepath = "results.json")
+    {
+        Get().BeginSessionImpl(name, filepath);
+    }
 
-	static void begin_session(const char* name) {
-		get().write_header(name);
-
-	}
-
-	static void end_session() {
-		get().write_footer();
-		get().fout.close();		
-	}
-
-	static ProfilerWriter& get() {
-		static ProfilerWriter instance;
-		return instance;
-	}
-
-	static void write(const ProfilerData& pd) {
-		get().writeImpl(pd);
-	}
-
-private:
-	void writeImpl(const ProfilerData& pd) {
-
-	}
-
-	void write_header(const char* header) {
-
-	}
-
-	void write_footer() {
-
-	}
-
-	ProfilerWriter(const char* filename = "profile.json") { 
-		fout.open(filename);
-		if (!fout.is_open())
-			throw std::invalid_argument("could not open or create the file");
-	}
-
-private:
-	std::ofstream fout;
+    static void EndSession()
+    {
+        Get().EndSessionImpl();
+    }
 };
+
+
+
+class InstrumentationTimer
+{
+private:
+	const char* m_Name;
+	std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTimepoint;
+	bool m_Stopped;
+
+public:
+    InstrumentationTimer(const char* name)
+        : m_Name(name), m_Stopped(false)
+    {
+        m_StartTimepoint = std::chrono::high_resolution_clock::now();
+    }
+
+    ~InstrumentationTimer()
+    {
+        if (!m_Stopped)
+            Stop();
+    }
+
+    void Stop()
+    {
+        auto endTimepoint = std::chrono::high_resolution_clock::now();
+
+        long long start = std::chrono::time_point_cast<std::chrono::milliseconds>(m_StartTimepoint).time_since_epoch().count();
+        long long end = std::chrono::time_point_cast<std::chrono::milliseconds>(endTimepoint).time_since_epoch().count();
+
+        uint32_t threadID = std::hash<std::thread::id>{}(std::this_thread::get_id());
+        Instrumentor::Get().WriteProfile({ m_Name, start, end, threadID });
+
+        m_Stopped = true;
+    }
+};
+
+#endif // PROFILER_H
