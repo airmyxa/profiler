@@ -7,6 +7,13 @@
 #include <fstream>
 #include <thread>
 
+// define PROFILING 0 to turn it off
+
+#define PROFILING 1
+#if PROFILING
+#define PROFILE_SCOPE(name) ProfileTimer timer##__LINE__(name)
+#define PROFILE_FUNCTION() PROFILE_SCOPE(__PRETTY_FUNCTION__) // in Windows change __PRETTY_FUNCTION__ -> __FUNCSIG__
+
 // this implementation is unsafe to work with threads.
 
 struct ProfileResult
@@ -120,7 +127,7 @@ private:
 	bool m_Stopped;
 
 public:
-    ProfileTimer(const char* name)
+    explicit ProfileTimer(const char* name)
         : m_Name(name), m_Stopped(false)
     {
         m_StartTimepoint = std::chrono::high_resolution_clock::now();
@@ -146,16 +153,14 @@ public:
     }
 };
 
-
-// define PROFILING 0 to turn it off
-
-#define PROFILING 1
-#if PROFILING
-#define PROFILE_SCOPE(name) ProfileTimer timer##__LINE__(name)
-#define PROFILE_FUNCTION() PROFILE_SCOPE(__PRETTY_FUNCTION__) // in Windows change __PRETTY_FUNCTION__ -> __FUNCSIG__
 #else
 #define PROFILE_SCOPE(name)
+#define PROFILE_FUNCTION()
+
+class ProfileWriter {
+public:
+    static void BeginSession(const char*) { }
+    static void EndSession() { }
+};
 #endif
-
-
 #endif // PROFILER_H

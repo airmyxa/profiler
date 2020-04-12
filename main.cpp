@@ -20,15 +20,18 @@ int func2() {
     return i;
 }
 
+void func3() {
+    PROFILE_FUNCTION();
+    auto x = func1();    
+    auto y = func2();
+}
+
 
 int main()
 {
     ProfileWriter::BeginSession("start");
-    auto res1 = func1();
-    auto res2 = func2();
+    func3();
     ProfileWriter::EndSession();
-
-    std::cout << res1 << res2;
 
     return EXIT_SUCCESS;
 }
