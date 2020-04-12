@@ -146,6 +146,9 @@ public:
     }
 };
 
+
+// define PROFILING 0 to turn it off
+
 #define PROFILING 1
 #if PROFILING
 #define PROFILE_SCOPE(name) ProfileTimer timer##__LINE__(name)
