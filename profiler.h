@@ -146,6 +146,7 @@ public:
     template <typename T>
     explicit ProfileTimer(T&& name)
         : m_name(std::forward<T>(name)), m_stopped(false) {
+        static_assert(std::is_constructible_v<std::string, T>);
         m_startTimepoint = std::chrono::high_resolution_clock::now();
     }
 
