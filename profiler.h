@@ -8,12 +8,18 @@
 #include <thread>
 #include <mutex>
 
-// define PROFILING 0 to turn it off
+// checked only in linux
 
+// define PROFILING 0 to turn it off
 #define PROFILING 1
 #if PROFILING
 #define PROFILE_SCOPE(name) ProfileTimer timer##__LINE__(name)
-#define PROFILE_FUNCTION() PROFILE_SCOPE(__PRETTY_FUNCTION__) // in Windows change __PRETTY_FUNCTION__ -> __FUNCSIG__
+#ifdef __linux__
+#define PROFILE_FUNCTION() PROFILE_SCOPE(__PRETTY_FUNCTION__)
+#endif
+#ifdef _WIN32
+#define PROFILE_FUNCTION() PROFILE_SCOPE(__FUNSIG__)
+#endif
 
 // this implementation is unsafe to work with threads.
 
