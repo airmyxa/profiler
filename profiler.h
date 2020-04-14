@@ -21,8 +21,6 @@
 #define PROFILE_FUNCTION() PROFILE_SCOPE(__FUNSIG__)
 #endif
 
-// this implementation is unsafe to work with threads.
-
 struct ProfileResult
 {
     std::string name;
